@@ -1,0 +1,184 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Copyright (c) 2020 Martin Jäger / Libre Solar
+ */
+
+/dts-v1/;
+#include <st/l0/stm32l072Xz.dtsi>
+
+/ {
+	model = "Libre Solar MPPT 1210 HUS";
+	compatible = "st,stm32l072";
+
+	pcb {
+		compatible = "charge-controller";
+
+		type = "MPPT 1210 HUS";
+		version-str = "v0.7.1";
+		version-num = <7>;		// minor version .1 includes no HW change
+
+		hs-voltage-max = <40>;
+		ls-voltage-max = <16>;
+	};
+
+	dcdc {
+		compatible = "dcdc";
+		timer = <&timers3>;
+		pwm-frequency = <50000>;
+		pwm-deadtime = <230>;
+		current-max = <10>;
+	};
+
+	chosen {
+		zephyr,console = &usart1;
+		zephyr,shell-uart = &usart1;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+	};
+
+	leds {
+		compatible = "charlieplexing-leds";
+		gpios = <&gpiob 13 GPIO_ACTIVE_HIGH>,	/* Pin A */
+			<&gpiob 2 GPIO_ACTIVE_HIGH>,	/* Pin C */
+			<&gpiob 14 GPIO_ACTIVE_HIGH>;	/* Pin B */
+
+		soc_1 {
+			states = <1 0 2>;
+		};
+
+		soc_2 {
+			states = <0 1 2>;
+		};
+
+		soc_3 {
+			states = <1 2 0>;
+		};
+
+		rxtx {
+			states = <2 1 0>;
+		};
+
+		load {
+			states = <2 0 1>;
+		};
+	};
+
+	outputs {
+		compatible = "outputs";
+
+		load {
+			label = "Load output";
+			gpios = <&gpioc 13 GPIO_ACTIVE_HIGH>;
+			current-max = <10>;
+			kconfig-flag;	/* make node visible in Kconfig */
+		};
+
+		usb-pwr {
+			label = "USB charging port enable";
+			gpios = <&gpiob 10 GPIO_ACTIVE_HIGH>;
+		};
+
+		boot0 {
+			label = "BOOT0 pin trigger";
+			gpios = <&gpiob 12 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
+	adc-inputs {
+		compatible = "adc-inputs";
+
+		v-low {
+			io-channels = <&adc1 0>;
+			multiplier = <105600>;
+			divider = <5600>;
+		};
+
+		v-high {
+			io-channels = <&adc1 1>;
+			multiplier = <105600>;
+			divider = <5600>;
+			enable-gpios = <&gpioc 14 GPIO_ACTIVE_HIGH>;
+		};
+
+		i-load {
+			io-channels = <&adc1 5>;
+			// amp gain: 50, resistor: 3 mOhm
+			multiplier = <1000>;
+			divider = <150>;	// 3*50
+		};
+
+		i-dcdc {
+			io-channels = <&adc1 6>;
+			// amp gain: 50, resistor: 3 mOhm
+			multiplier = <1000>;
+			divider = <150>;	// 3*50
+		};
+
+		temp-bat {
+			io-channels = <&adc1 7>;
+			multiplier = <10000>;
+			divider = <1>;
+		};
+
+		vref-mcu {
+			io-channels = <&adc1 17>;
+			multiplier = <1>;
+			divider = <1>;
+		};
+
+		temp-mcu {
+			io-channels = <&adc1 18>;
+			multiplier = <10000>;
+			divider = <1>;
+		};
+	};
+
+	aliases {
+		uart-dbg = &usart1;
+		uart-uext = &usart2;
+		spi-uext = &spi1;
+		i2c-uext = &i2c1;
+	};
+
+	soc {
+		// not (yet) provided by Zephyr dts, but necessary for dcdc node
+		timers3: timers@40000400 {
+			compatible = "st,stm32-timers";
+			reg = <0x40000400 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_APB1 0x00000002>;
+			interrupts = <16 0>;
+			interrupt-names = "global";
+			status = "disabled";
+			label = "TIMERS_3";
+		};
+	};
+};
+
+&usart1 {
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&usart2 {
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&i2c1 {
+	clock-frequency = <I2C_BITRATE_FAST>;
+	status = "okay";
+};
+
+&spi1 {
+	cs-gpios = <&gpioa 15 GPIO_ACTIVE_LOW>;
+	status = "okay";
+};
+
+&iwdg {
+	status = "okay";
+};
+
+&eeprom {
+	status = "okay";
+};

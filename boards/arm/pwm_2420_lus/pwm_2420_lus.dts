@@ -1,0 +1,197 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Copyright (c) 2019 Martin Jäger / Libre Solar
+ */
+
+/dts-v1/;
+#include <st/l0/stm32l072Xz.dtsi>
+
+/ {
+	model = "Libre Solar PWM 2420 LUS";
+	compatible = "st,stm32l072";
+
+	pcb {
+		compatible = "charge-controller";
+
+		type = "PWM 2420 LUS";
+		version-str = "v0.3";
+		version-num = <3>;
+
+		hs-voltage-max = <55>;
+		ls-voltage-max = <32>;
+		// The MCU, where internal temperature is measured, is close to the MOSFETs. Tests
+		// showed that temperature at heat sink is only 10-20°C above measured internal
+		// temp. As PWM CC doesn't use electrolytic cap for core charging function,
+		// internal temperature of 70°C can be allowed (instead of default 50°C).
+		internal-tref-max = <70>;
+	};
+
+	chosen {
+		zephyr,console = &usart1;
+		zephyr,shell-uart = &usart1;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+	};
+
+	leds {
+		compatible = "charlieplexing-leds";
+		gpios = <&gpiob 13 GPIO_ACTIVE_HIGH>,	/* Pin A */
+			<&gpiob 14 GPIO_ACTIVE_HIGH>,	/* Pin B */
+			<&gpiob 15 GPIO_ACTIVE_HIGH>;	/* Pin C */
+
+		soc_1 {
+			states = <1 0 2>;
+		};
+
+		soc_2 {
+			states = <0 1 2>;
+		};
+
+		soc_3 {
+			states = <1 2 0>;
+		};
+
+		load {
+			states = <2 1 0>;
+		};
+
+		rxtx {
+			states = <2 0 1>;
+		};
+	};
+
+	outputs {
+		compatible = "outputs";
+
+		pwm_switch {
+			label = "PWM power switch (solar panel)";
+			pwms = <&pwm3 4 (20*1000*1000) PWM_POLARITY_NORMAL>; /* 20 ms period = 50 Hz */
+			// Current reduced to 15A. Increase to 20A PCB max values
+			// only if attached to a big heat sink.
+			current-max = <15>;
+			kconfig-flag;	/* make node visible in Kconfig */
+		};
+
+		load {
+			label = "Load output";
+			gpios = <&gpiob 2 GPIO_ACTIVE_LOW>;
+			current-max = <15>;
+			kconfig-flag;	/* make node visible in Kconfig */
+		};
+
+		usb-pwr {
+			label = "USB charging port disable";
+			gpios = <&gpiob 5 GPIO_ACTIVE_LOW>;
+		};
+
+		boot0 {
+			label = "BOOT0 pin trigger";
+			gpios = <&gpiob 12 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
+	adc-inputs {
+		compatible = "adc-inputs";
+
+		v-low {
+			io-channels = <&adc1 0>;
+			multiplier = <132000>;
+			divider = <12000>;
+		};
+
+		v-pwm {
+			io-channels = <&adc1 1>;
+			multiplier = <25224>;	// (12*8.2 + 120*8.2 + 120*12) * 10
+			divider = <984>;	// (8.2*12) * 10
+			offset = <37414>;	// 65536 / (1 + 8.2/120 + 8.2/12)
+		};
+
+		i-load {
+			io-channels = <&adc1 5>;
+			// amp gain: 68/2.2, resistor: 2 mOhm
+			// fix for hardware bug in overcurrent comparator voltage divider wiring
+			multiplier = <2931>;	// 1000 * (39+12+8.2) / (12+8.2) = 2930.69
+			divider = <62>;	// 2*68/2.2 = 61.8181
+		};
+
+		i-pwm {
+			io-channels = <&adc1 6>;
+			// amp gain: 68/2.2, resistor: 2 mOhm
+			multiplier = <2200>;	// 1000*2.2
+			divider = <136>;	// 2*68
+		};
+
+		temp-bat {
+			io-channels = <&adc1 7>;
+			multiplier = <8200>;	// 8.2k NTC series resistor
+			divider = <1>;
+		};
+
+		vref-mcu {
+			io-channels = <&adc1 17>;
+			multiplier = <1>;
+			divider = <1>;
+		};
+
+		temp-mcu {
+			io-channels = <&adc1 18>;
+			multiplier = <1>;
+			divider = <1>;
+		};
+	};
+
+	aliases {
+		uart-dbg = &usart1;
+		uart-uext = &usart2;
+		spi-uext = &spi1;
+		i2c-uext = &i2c1;
+	};
+
+	// this should normally go to Zephyr repo
+	soc {
+		timers3: timers@40000400 {
+			compatible = "st,stm32-timers";
+			reg = <0x40000400 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_APB1 0x00000002>;
+			status = "okay";
+			label = "TIMERS_3";
+
+			pwm3: pwm {
+				compatible = "st,stm32-pwm";
+				status = "okay";
+				st,prescaler = <10000>;
+				label = "PWM_3";
+				#pwm-cells = <3>;
+			};
+		};
+	};
+};
+
+&usart1 {
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&usart2 {
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&i2c1 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+&spi1 {
+	cs-gpios = <&gpioa 15 GPIO_ACTIVE_LOW>;
+	status = "okay";
+};
+
+&iwdg {
+	status = "okay";
+};
+
+&eeprom {
+	status = "okay";
+};
