@@ -12,3 +12,6 @@ boards*
 build
 modules
 rtos
+
+# Utility configs
+./*.stc
